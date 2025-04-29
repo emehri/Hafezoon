@@ -1,0 +1,240 @@
+﻿@page "/"
+@using NAudio.Wave
+@using System.Media
+
+<style>
+    * {
+    font-family: Calibri;
+    text-align: right;
+    direction: rtl;
+    margin: 10px;
+    }
+
+    select {
+    height: 30px;
+    }
+
+    button {
+    width: 90px;
+    text-align: center;
+    }
+
+    option {
+    width: 300px;
+    }
+</style>
+@if (IsBeingRecorded)
+{
+    <h4 style="text-align:center;">در حال ضبط صدا...</h4>
+    <button @onclick="()=>Stop()">توقف</button>
+}
+else
+{
+    <select @bind="@SooreIndex" @bind:event="oninput" @onchange="Change_Soore" style="width:200px;">
+        @foreach (var xx in Quran.Text)
+        {
+            <option value="@xx.Tartib">@xx.Name</option>
+        }
+    </select>
+    <br />
+    <button @onclick="Prev_Soore">سوره قبل</button>
+    <button @onclick="Next_Soore">سوره بعد</button>
+    <br />
+    <select @bind="@Aye_Index" @bind:event="oninput" @onchange="Change_Aye" style="width:300px;color:darkred;">
+        @{
+            int aa = 0;
+        }
+        @foreach (var xx in Quran.Text[SooreIndex].Ayaat)
+        {
+            <option value="@aa" style="width:300px;">@Kootah(xx, aa + 1)</option>
+            aa++;
+        }
+    </select>
+    <br />
+    <button @onclick="Prev_Aye">آیه قبل</button>
+    <button @onclick="Next_Aye">آیه بعد</button>
+    <h3 style="color:blue;">سوره @Quran.Text[SooreIndex].Name آیه @Quran.Adad_to_Farsi((Aye_Index + 1).ToString())</h3>
+    <h4 style="color:green;">@Aye</h4>
+    <button @onclick="Tartil">ترتیل</button>
+    <button @onclick="Start">ضبط صدا</button>
+    <br />
+    <h3>صداهای ضبط شده</h3>
+    @for (int i = 1; i <= Recorded_Num; i++)
+    {
+        int j = i;
+        <button @onclick="()=>Play(j)">@Quran.Adad_to_Farsi(j.ToString())</button>
+    }
+    <hr />
+    <button @onclick="Clear">پاکسازی</button>
+}
+<h1 style="color:red">@Khata</h1>
+@code {
+    string Khata = "";
+    int SooreIndex = 0;
+    int Aye_Index = 0;
+    string Aye = "";
+    bool IsBeingRecorded = false;
+    WaveInEvent? waveIn = new WaveInEvent();
+    WaveFileWriter writer;
+    int Recorded_Num;
+    void Tartil()
+    {
+        try
+        {
+            CSAudioPlayer.AudioPlayer aa = new AudioPlayer();
+            aa.FileName = $@"C:\Tartil\{Three_Digits(SooreIndex + 1)}{Three_Digits(Aye_Index + 1)}.mp3";
+            aa.Play();
+        }
+        catch (Exception ex)
+        {
+        }
+    }
+    string Three_Digits(int n)
+    {
+        string ss = n.ToString();
+        if (ss.Length == 1)
+            ss = "0" + ss;
+        if (ss.Length == 2)
+            ss = "0" + ss;
+        return ss;
+    }
+    void Clear()
+    {
+        for (int i = 1; i <= Recorded_Num; i++)
+            try
+            {
+                File.Delete($@"C:\Hefz\{SooreIndex + 1}\{Aye_Index + 1}\{i}.wav");
+            }
+            catch { }
+        Refresh();
+    }
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        try
+        {
+            Quran.Init();
+            Aye = $"﴿{Quran.Text[SooreIndex].Ayaat[Aye_Index]}﴾";
+            waveIn.DataAvailable += (s, e) => writer.Write(e.Buffer, 0, e.BytesRecorded);
+        }
+        catch(Exception ex)
+        {
+            Khata = ex.Message;
+        }
+    }
+    static WaveOutEvent? waveOut = new WaveOutEvent();
+    void Play(int n)
+    {
+        try
+        {
+            CSAudioPlayer.AudioPlayer aa = new AudioPlayer();
+            aa.FileName = $@"C:\Hefz\{SooreIndex + 1}\{Aye_Index + 1}\{n}.wav";
+            aa.Play();
+        }
+        catch (Exception ex)
+        {
+        }
+    }
+    string path = "";
+    AudioPlayer player1 = new AudioPlayer();
+    void Start()
+    {
+        SetFile();
+        IsBeingRecorded = true;
+        try
+        {
+            writer = new WaveFileWriter(path, waveIn.WaveFormat);
+            waveIn.StartRecording();
+        }
+        catch (Exception ex)
+        {
+        }
+        Refresh();
+    }
+    void Stop()
+    {
+        try
+        {
+            waveIn.StopRecording();
+            waveIn.Dispose();
+            writer.Dispose();
+        }
+        catch
+        {
+        }
+        IsBeingRecorded = false;
+        Refresh();
+    }
+    string temp = "";
+    void Prev_Soore()
+    {
+        if (SooreIndex <= 0)
+            return;
+        SooreIndex--;
+        Aye_Index = 0;
+        Refresh();
+    }
+    void Next_Soore()
+    {
+        if (SooreIndex >= 113)
+            return;
+        SooreIndex++;
+        Aye_Index = 0;
+        Refresh();
+    }
+    void Prev_Aye()
+    {
+        if (Aye_Index <= 0)
+            return;
+        Aye_Index--;
+        Refresh();
+    }
+    string Kootah(string s, int kk)
+    {
+        string ss = $"{Quran.Adad_to_Farsi(kk.ToString())} - ";
+        for (int i = 0; i < s.Length; i++)
+            if (ss.Length < 100)
+                ss += s[i];
+        return ss;
+    }
+    void Next_Aye()
+    {
+        if (Aye_Index >= Quran.Text[SooreIndex].Ayaat.Count - 1)
+            return;
+        Aye_Index++;
+        Refresh();
+    }
+    void SetFile()
+    {
+        if (!Directory.Exists(@"C:\Hefz"))
+            Directory.CreateDirectory(@"C:\Hefz");
+        if (!Directory.Exists(@$"C:\Hefz\{SooreIndex + 1}"))
+            Directory.CreateDirectory(@$"C:\Hefz\{SooreIndex + 1}");
+        if (!Directory.Exists($@"C:\Hefz\{SooreIndex + 1}\{Aye_Index + 1}"))
+            Directory.CreateDirectory($@"C:\Hefz\{SooreIndex + 1}\{Aye_Index + 1}");
+        int i;
+        for (i = 1; ; i++)
+        {
+            path = $@"C:\Hefz\{SooreIndex + 1}\{Aye_Index + 1}\{i}.wav";
+            if (!File.Exists(path))
+                break;
+        }
+        Recorded_Num = i - 1;
+    }
+    void Refresh()
+    {
+        Aye = $"﴿{Quran.Text[SooreIndex].Ayaat[Aye_Index]}﴾";
+        SetFile();
+        StateHasChanged();
+    }
+    void Change_Soore()
+    {
+        Aye_Index = 0;
+        Refresh();
+    }
+    void Change_Aye()
+    {
+        Refresh();
+    }
+    string Error = "";
+}
